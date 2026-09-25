@@ -35,7 +35,6 @@
 | `src/scheduler.py` | 图模型、区域生长（含补种）、FM 精化、bandcomp、列表调度 |
 | `src/structural_scheduler.py` | 结构候选（波前条带、宽图分摊、fork-join 模板） |
 | `src/run_experiments.py` | 候选集构建（按图规模分档）、评估循环、结果落盘 |
-| `src/leaderboard.py` | 从逐格明细 CSV 生成结果总表（含一致性检查） |
 | `src/make_report.py` | 报告、逐用例 CSV、加速比曲线图 |
 | `src/validate_results.py` | 结果数据校验（覆盖、数值一致、范围） |
 | `src/audit_worker.py` / `src/run_audit.py` | 官方 CLI 逐格复放审计（单格 / 批量） |
@@ -57,14 +56,11 @@ python src/make_report.py
 # 3) 校验结果（覆盖 1200 格、数值一致性；默认严格，发现问题以非零退出）
 python src/validate_results.py
 
-# 4) 生成结果总表
-python src/leaderboard.py
-
-# 5) 官方 CLI 逐格复放审计（可选；单格 0.5 秒~3 分钟，1200 格合计约 2.8 小时）
+# 4) 官方 CLI 逐格复放审计（可选；单格 0.5 秒~3 分钟，1200 格合计约 2.8 小时）
 python src/run_audit.py --jobs 8
 ```
 
-数据流：`run_experiments.py` 逐格把最优方案与指标写入结果记录；`make_report.py` 汇总为 `all_results.csv`；`leaderboard.py` 与 `validate_results.py` 都以这份 CSV 为单一数据源；`run_audit.py` 用官方 CLI 独立进程复核每一格并生成审计汇总。仓库 `results/` 下提交的正是这套流程产出的最终快照（含 1200 个最优方案 `results/best_plans/`）。
+数据流：`run_experiments.py` 逐格把最优方案与指标写入结果记录；`make_report.py` 汇总为 `all_results.csv`；`validate_results.py` 以这份 CSV 为单一数据源做覆盖与一致性校验；`run_audit.py` 用官方 CLI 独立进程复核每一格并生成审计汇总。仓库 `results/` 下提交的正是这套流程产出的最终快照（含 1200 个最优方案 `results/best_plans/`）。
 
 ## 运行时间口径
 

@@ -109,7 +109,6 @@ DDR 拷贝带宽 60 B/cycle，L1 512KB，UB 128KB，由官方评估器 `multicor
 ├── tests/                    15 项回归测试（切分合法性、环守卫、条带契约）
 ├── results/
 │   ├── BENCHMARK_1200.md     1200 格结果说明（指标口径、汇总统计、方法分布）
-│   ├── LEADERBOARD.md        评估结果总表（官方口径）
 │   ├── best_plans/           1200 格最优方案（配合官方附件可直接复跑成绩）
 │   ├── audit/                官方 CLI 复放审计汇总
 │   ├── audit_summary.json    审计核对汇总（1189 一致 / 11 修正 / 0 错误）
@@ -131,16 +130,14 @@ python src/run_experiments.py --full
 python src/make_report.py
 # 3) 校验结果（覆盖 1200 格与数值一致性，默认严格）
 python src/validate_results.py
-# 4) 生成结果总表
-python src/leaderboard.py
-# 5) 回归测试（15 项）
+# 4) 回归测试（15 项）
 python -m unittest discover -s tests
-# 6) 官方 CLI 逐格复放审计：核对仓库提交的 1200 个方案
+# 5) 官方 CLI 逐格复放审计：核对仓库提交的 1200 个方案
 #    （单格 0.5 秒~3 分钟，全量约 2.8 小时；结果与 audit_summary.json 对照）
 python src/run_audit.py --jobs 8
 ```
 
-数据流：`run_experiments.py` 逐格写入最优方案与指标 → `make_report.py` 汇总为 `all_results.csv` → `leaderboard.py` / `validate_results.py` 以该 CSV 为单一数据源 → `run_audit.py` 用官方 CLI 独立进程复核每格。仓库 `results/best_plans/` 提交了全部 1200 个最优方案，因此第 6 步不需要重跑搜索即可独立复核我们的成绩。
+数据流：`run_experiments.py` 逐格写入最优方案与指标 → `make_report.py` 汇总为 `all_results.csv` → `validate_results.py` 以该 CSV 为单一数据源做覆盖与一致性校验 → `run_audit.py` 用官方 CLI 独立进程复核每格。仓库 `results/best_plans/` 提交了全部 1200 个最优方案，因此第 6 步不需要重跑搜索即可独立复核我们的成绩。
 
 注意评估器的运行间非确定性：同一方案在独立进程中重复评估，P2/P3 的 Makespan 可能出现 0.1%～1.6% 的漂移，对比实验时应固定进程内评估或取多次中位。
 
