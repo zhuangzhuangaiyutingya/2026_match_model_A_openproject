@@ -132,7 +132,7 @@ def collect(summary):
                     'case': case, 'problem': p, 'cores': k,
                     'singlecore_makespan': sc_ms,
                     'makespan': best['makespan'],
-                    'speedup': round(sc_ms / best['makespan'], 4),
+                    'speedup': round(sc_ms / best['makespan'], 6),
                     'added_copy_bytes': best.get('added_copy_bytes', 0),
                     'label': best.get('label') or 'unknown',
                     'cache_hit_rate': hit,
