@@ -1,5 +1,10 @@
 # -*- coding: utf-8 -*-
 """Contract tests for the window-component (bandcomp) partitioner."""
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+
 import unittest
 
 from scheduler import (

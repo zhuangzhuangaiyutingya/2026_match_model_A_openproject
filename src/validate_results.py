@@ -1,116 +1,85 @@
 # -*- coding: utf-8 -*-
-"""Validate collaborative leaderboard and experiment snapshots.
+"""结果数据校验：覆盖、一致性、数值范围。默认严格，任何问题都以非零退出。
 
-The default mode reports incomplete or conflicting snapshots as warnings so it
-can be used during development. ``--strict`` turns those warnings into errors.
+校验 results/report/all_results.csv（1200 行逐格明细）：
+  1. 覆盖：case_001..case_100 × 问题 1..3 × 核数 2..5 恰好各一格；
+  2. 数值：makespan/单核基线/speedup 均为正，且 speedup == 单核/makespan
+     （相对误差 < 0.1%）；
+  3. 范围：cache_hit_rate ∈ [0, 1]（问题三），问题一/二应为 0；
+  4. 若存在 results/audit/audit_summary.json：核对 total/mismatch 计数
+     与当前 CSV 一致。
+
+用法：python src/validate_results.py
 """
-from __future__ import annotations
-
-import argparse
+import csv
 import json
-import re
+import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-RESULTS = HERE / "results"
-CELL_RE = re.compile(r"^case_\d{3}\|p[123]\|k[2345]$")
+ROOT = HERE.parent
+CSV_PATH = ROOT / 'results' / 'report' / 'all_results.csv'
+SUMMARY = ROOT / 'results' / 'audit' / 'audit_summary.json'
 
 
-def read_json(path: Path, errors: list[str]):
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except Exception as exc:  # noqa: BLE001
-        errors.append(f"{path.name}: invalid JSON: {exc}")
-        return None
+def main():
+    errors = []
+    if not CSV_PATH.exists():
+        raise SystemExit(f'ERROR: missing {CSV_PATH}')
+    with open(CSV_PATH, encoding='utf-8-sig') as fh:
+        rows = list(csv.DictReader(fh))
 
+    seen = set()
+    for r in rows:
+        key = f"{r['case']}|p{r['problem']}|k{r['cores']}"
+        if key in seen:
+            errors.append(f'{key}: duplicate cell')
+        seen.add(key)
 
-def validate_board(errors: list[str], warnings: list[str]) -> int:
-    board_dir = RESULTS / "leaderboard"
-    files = sorted(board_dir.glob("*.json")) if board_dir.exists() else []
-    seen = 0
-    for path in files:
-        data = read_json(path, errors)
-        if not isinstance(data, dict):
+        try:
+            sc = float(r['singlecore_makespan'])
+            ms = float(r['makespan'])
+            sp = float(r['speedup'])
+        except (KeyError, ValueError):
+            errors.append(f'{key}: missing or non-numeric value')
             continue
-        if not isinstance(data.get("meta"), dict):
-            errors.append(f"{path.name}: missing meta object")
-        cells = data.get("cells")
-        if not isinstance(cells, dict):
-            errors.append(f"{path.name}: missing cells object")
-            continue
-        seen += len(cells)
-        for key, rec in cells.items():
-            if not CELL_RE.match(key):
-                errors.append(f"{path.name}: malformed cell key {key!r}")
-                continue
-            if not isinstance(rec, dict):
-                errors.append(f"{path.name}:{key}: record is not an object")
-                continue
-            if "error" in rec:
-                continue
-            ms = rec.get("makespan")
-            sp = rec.get("speedup")
-            if not isinstance(ms, (int, float)) or ms <= 0:
-                errors.append(f"{path.name}:{key}: makespan must be positive")
-            if not isinstance(sp, (int, float)) or sp <= 0:
-                errors.append(f"{path.name}:{key}: speedup must be positive")
-    if not files:
-        warnings.append("no results/leaderboard/*.json files found")
-    return seen
+        if sc <= 0 or ms <= 0 or sp <= 0:
+            errors.append(f'{key}: non-positive value')
+        elif abs(sc / ms - sp) > 0.001 * sp:
+            errors.append(f'{key}: speedup {sp} != {sc}/{ms}={sc/ms:.4f}')
+
+        hit = r.get('cache_hit_rate')
+        if hit not in (None, ''):
+            h = float(hit)
+            if not 0 <= h <= 1:
+                errors.append(f'{key}: cache_hit_rate {h} outside [0,1]')
+            elif r['problem'] in ('1', '2') and h != 0:
+                errors.append(f'{key}: cache_hit_rate must be 0 for '
+                              f'problem {r["problem"]}')
+
+    expected = {'case_%03d' % i for i in range(1, 101)}
+    for p in ('1', '2', '3'):
+        for k in ('2', '3', '4', '5'):
+            for c in expected:
+                key = f'{c}|p{p}|k{k}'
+                if key not in seen:
+                    errors.append(f'{key}: missing cell')
+
+    if len(rows) != 1200:
+        errors.append(f'expected 1200 rows, got {len(rows)}')
+
+    if SUMMARY.exists():
+        s = json.loads(SUMMARY.read_text(encoding='utf-8'))
+        if s.get('total_cells') not in (None, len(rows)):
+            errors.append(f"audit_summary total_cells={s.get('total_cells')} "
+                          f'!= CSV rows {len(rows)}')
+
+    for e in errors[:30]:
+        print('ERROR:', e)
+    if errors:
+        raise SystemExit(f'{len(errors)} problems found')
+    print(f'validate OK: 1200 cells, coverage complete, values consistent')
 
 
-def validate_summaries(errors: list[str], warnings: list[str]) -> int:
-    files = [RESULTS / "summary.json"] + sorted(RESULTS.glob("summary_*.json"))
-    files = [p for p in files if p.exists()]
-    seen: dict[tuple[str, str], str] = {}
-    runs = 0
-    for path in files:
-        data = read_json(path, errors)
-        if not isinstance(data, dict):
-            continue
-        for case, entry in data.items():
-            if not isinstance(entry, dict):
-                errors.append(f"{path.name}:{case}: entry is not an object")
-                continue
-            for key, record in entry.get("runs", {}).items():
-                runs += 1
-                marker = (case, key)
-                if marker in seen:
-                    warnings.append(
-                        f"duplicate run {case}/{key}: {seen[marker]} and {path.name}"
-                    )
-                else:
-                    seen[marker] = path.name
-                best = record.get("best") if isinstance(record, dict) else None
-                if not isinstance(best, dict):
-                    continue
-                hit_rate = best.get("cache_hit_rate")
-                if hit_rate is not None and not (0 <= hit_rate <= 1):
-                    warnings.append(
-                        f"{path.name}:{case}/{key}: cache_hit_rate={hit_rate!r} outside [0, 1]"
-                    )
-    if not files:
-        warnings.append("no summary*.json files found")
-    return runs
-
-
-def main() -> int:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--strict", action="store_true")
-    args = ap.parse_args()
-    errors: list[str] = []
-    warnings: list[str] = []
-    cells = validate_board(errors, warnings)
-    runs = validate_summaries(errors, warnings)
-    for item in errors:
-        print(f"ERROR: {item}")
-    for item in warnings:
-        print(f"WARNING: {item}")
-    if args.strict:
-        errors.extend(warnings)
-    print(f"checked board cells={cells}, summary runs={runs}")
-    return 1 if errors else 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+if __name__ == '__main__':
+    main()

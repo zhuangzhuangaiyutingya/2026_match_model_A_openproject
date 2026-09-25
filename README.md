@@ -75,8 +75,8 @@ DDR 拷贝带宽 60 B/cycle，L1 512KB，UB 128KB，由官方评估器 `multicor
 最终 1200 格全部经官方 CLI 独立进程复放（每格留档输入、输出 JSON）：
 
 - **1189 / 1200** 与评测记录完全一致；
-- **11 格**出现 0.1%～1.6% 的偏差。排查结论：P2/P3 评估器存在跨进程非确定性——同一方案不同进程的 Makespan 与新增搬运量都会有微差（进程内完全确定，本地的 PYTHONHASHSEED 扫描排除了散列种子因素，是 Linux Python 3.8 的运行间行为）。修正口径为 CLI 存档值，即提交的方案与成绩互相印证的那一份；
-- 评测机复跑成绩允许有 ±0.5% 左右的自然波动，属于评估器本身的行为。
+- **11 格**出现偏差。排查结论：P2/P3 评估器存在跨进程非确定性——同一方案在不同独立进程中的 Makespan 与新增搬运量会有微差（同一进程内完全确定；本地的 PYTHONHASHSEED 扫描排除了散列种子因素，为 Linux Python 3.8 的运行间行为）。11 格偏差为 0.1%～1.6%（单次复放相对评测记录的观测，非多次采样统计），修正口径为 CLI 存档值，即提交的方案与成绩互相印证的那一份；
+- 对外引用成绩时建议按 ±0.5% 理解典型复跑波动，极端情形可达 1.6%。
 
 复评全量 1200 格合计 2.8 小时（平均 8.3 秒/格，最慢单格 183 秒），64 核机器 44 并发约 40 分钟。六轮批量优化在服务器端累计约 17 小时。
 
@@ -109,8 +109,10 @@ DDR 拷贝带宽 60 B/cycle，L1 512KB，UB 128KB，由官方评估器 `multicor
 ├── tests/                    15 项回归测试（切分合法性、环守卫、条带契约）
 ├── results/
 │   ├── BENCHMARK_1200.md     1200 格结果说明（指标口径、汇总统计、方法分布）
-│   ├── LEADERBOARD.md        1200 格总榜（官方口径）
-│   ├── audit_summary.json    官方 CLI 全量复放核对汇总
+│   ├── LEADERBOARD.md        评估结果总表（官方口径）
+│   ├── best_plans/           1200 格最优方案（配合官方附件可直接复跑成绩）
+│   ├── audit/                官方 CLI 复放审计汇总
+│   ├── audit_summary.json    审计核对汇总（1189 一致 / 11 修正 / 0 错误）
 │   └── report/               逐用例结果 CSV、加速比曲线、方法贡献统计
 └── docs/
     ├── README_SOLUTION.md    算法与复现说明（论文表述框架）
@@ -122,17 +124,23 @@ DDR 拷贝带宽 60 B/cycle，L1 512KB，UB 128KB，由官方评估器 `multicor
 赛题附件（`data/case_*.json` 计算图与 `code/multicore_cut_evaluate_problem_*.py` 官方评估器）请从竞赛官方渠道获取，放到与 `src/` 平级的 `data/` 与 `code/` 目录后：
 
 ```bash
-cd src
-# 对接官方评估器的路径约定见 run_experiments.py 顶部；
-# 全量实验（支持断点续跑，小图秒级、3.9 万算子大图单格可达数十分钟）
-python run_experiments.py --full
-# 榜单与报告（从分片合成）
-python make_report.py
-# 回归测试
+# 1) 全量实验：生成候选 -> 官方评估器打分 -> 逐格择优
+#    （支持断点续跑，小图秒级、3.9 万算子大图单格可达数十分钟）
+python src/run_experiments.py --full
+# 2) 汇总为逐格明细 CSV 与图表
+python src/make_report.py
+# 3) 校验结果（覆盖 1200 格与数值一致性，默认严格）
+python src/validate_results.py
+# 4) 生成结果总表
+python src/leaderboard.py
+# 5) 回归测试（15 项）
 python -m unittest discover -s tests
-# 官方 CLI 复放某格方案
-python audit_worker.py --case case_001
+# 6) 官方 CLI 逐格复放审计：核对仓库提交的 1200 个方案
+#    （单格 0.5 秒~3 分钟，全量约 2.8 小时；结果与 audit_summary.json 对照）
+python src/run_audit.py --jobs 8
 ```
+
+数据流：`run_experiments.py` 逐格写入最优方案与指标 → `make_report.py` 汇总为 `all_results.csv` → `leaderboard.py` / `validate_results.py` 以该 CSV 为单一数据源 → `run_audit.py` 用官方 CLI 独立进程复核每格。仓库 `results/best_plans/` 提交了全部 1200 个最优方案，因此第 6 步不需要重跑搜索即可独立复核我们的成绩。
 
 注意评估器的运行间非确定性：同一方案在独立进程中重复评估，P2/P3 的 Makespan 可能出现 0.1%～1.6% 的漂移，对比实验时应固定进程内评估或取多次中位。
 

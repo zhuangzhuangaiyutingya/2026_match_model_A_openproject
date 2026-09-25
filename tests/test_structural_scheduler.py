@@ -6,6 +6,11 @@ rather than at a heuristic quality choice.  The small compatibility adapters
 accept the natural public representations (attributes or mapping fields) while
 keeping the assertions on the documented behaviour strict.
 """
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+
 import inspect
 import unittest
 

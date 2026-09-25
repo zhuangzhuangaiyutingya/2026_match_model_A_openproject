@@ -7,6 +7,11 @@ balance and shredded tensors into cross-core copies (see case_020: 99% of ops
 scattered, S=1.00 at every core count).  With reseeding, a cluster keeps
 pulling new seeds until it reaches its work target.
 """
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+
 import unittest
 
 from scheduler import GraphModel, region_grow
