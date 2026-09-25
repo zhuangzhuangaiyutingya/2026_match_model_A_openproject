@@ -102,7 +102,6 @@ DDR 拷贝带宽 60 B/cycle，L1 512KB，UB 128KB，由官方评估器 `multicor
 │   ├── scheduler.py          图模型 / 区域生长 / FM 精化 / bandcomp / 列表调度
 │   ├── structural_scheduler.py  结构候选（波前、宽图、fork-join）
 │   ├── run_experiments.py    候选集构建、评估循环、结果落盘
-│   ├── leaderboard.py        榜单合成
 │   ├── make_report.py        报告与图表
 │   ├── sync_cross_v36.py     跨问题交叉评估
 │   └── audit_worker.py       官方 CLI 逐格复放审计
