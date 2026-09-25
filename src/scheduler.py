@@ -15,6 +15,7 @@
 """
 import heapq
 import math
+import random
 from collections import defaultdict, deque
 
 COPY_TYPES = {'COPY_IN', 'COPY_OUT'}
@@ -458,7 +459,7 @@ def path_partition(gm, n_parts, max_pass=6):
     return op_group, core_tasks
 
 
-def bandcomp_partition(gm, n_cores, window=6, sticky=0.5):
+def bandcomp_partition(gm, n_cores, window=6, sticky=0.5, seed=0):
     """深度窗口 × 连通分量划分：天然无环的并行条带。
 
     每个深度窗口内的弱连通分量互无边（分量定义保证），窗口间边只会
@@ -502,6 +503,7 @@ def bandcomp_partition(gm, n_cores, window=6, sticky=0.5):
     core_m = [0.0] * n_cores
     core_v = [0.0] * n_cores
     core_tasks = [[] for _ in range(n_cores)]
+    rng = random.Random(seed) if seed else None
     next_id = 0
     for comps in windows:
         comp_cores = {}
@@ -519,7 +521,8 @@ def bandcomp_partition(gm, n_cores, window=6, sticky=0.5):
             for core in range(n_cores):
                 load = max(core_m[core], core_v[core])
                 stick_gain = stick.get(core, 0.0)
-                key = (load - sticky * min(stick_gain, load), core)
+                tie = rng.random() if rng else 0.0
+                key = (load - sticky * min(stick_gain, load), tie, core)
                 if best_key is None or key < best_key:
                     best_core, best_key = core, key
             cid = next_id
@@ -741,7 +744,7 @@ def _shift_cost(gm, op, g_from, g_to, op_group):
 
 # ---------------- 列表调度 ----------------
 
-def list_schedule(gm, op_group, n_cores, scene):
+def list_schedule(gm, op_group, n_cores, scene, rank_spill_w=1.5):
     """通信感知列表调度：返回每核执行顺序。
 
     scene='A'：Task 串行执行；同核前驱 +100，跨核前驱 +1000+搬运。
@@ -784,7 +787,7 @@ def list_schedule(gm, op_group, n_cores, scene):
             best = max(best, rank[s] + t_comm[t][s] / BW + delay)
         l1, ub = gm.cluster_workset(task_ops[t])
         spill = (max(0.0, ub - CAP_UB * 0.9) + max(0.0, l1 - CAP_L1 * 0.9))
-        rank[t] = max(tm[t], tv[t]) + 1.5 * spill / BW + best
+        rank[t] = max(tm[t], tv[t]) + rank_spill_w * spill / BW + best
 
     # 拓扑约束下的优先序：Kahn + 按 -rank 的堆，保证前驱必先于后继调度
     indeg = {t: len(task_preds[t]) for t in tkeys}
