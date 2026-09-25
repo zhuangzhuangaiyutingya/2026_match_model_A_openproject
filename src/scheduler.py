@@ -547,11 +547,12 @@ class CycleGuard:
     def __init__(self, gm, op_group):
         self.gm = gm
         self.group = dict(op_group)
-        self.edge_count = defaultdict(int)     # (ta, tb) -> 支撑该边的算子对数
-        for (u, v) in gm.pair_tensors:
-            ta, tb = self.group[u], self.group[v]
-            if ta != tb:
-                self.edge_count[(ta, tb)] += 1
+        self.edge_count = defaultdict(int)     # (ta, tb) -> 支撑该边的依赖数
+        for u in gm.eligible:
+            for v in gm.succs.get(u, ()):      # 完整依赖，含零字节边
+                ta, tb = self.group[u], self.group[v]
+                if ta != tb:
+                    self.edge_count[(ta, tb)] += 1
         self.succ_adj = None
         self.pred_adj = None
 
@@ -761,12 +762,17 @@ def list_schedule(gm, op_group, n_cores, scene):
             for tid in tids:
                 t_comm[tu][tvt] += gm.tensor_size[tid]
 
+    # 任务依赖必须来自完整依赖（preds/succs，含零字节 op→op 边），
+    # 否则无张量的直接依赖会被调度漏掉，同核顺序可能违反官方校验。
     task_preds = defaultdict(set)
     task_succ = defaultdict(set)
-    for tu in t_comm:
-        for tvt in t_comm[tu]:
-            task_succ[tu].add(tvt)
-            task_preds[tvt].add(tu)
+    for u in gm.eligible:
+        tu = op_group[u]
+        for v in gm.succs.get(u, ()):
+            tvt = op_group[v]
+            if tu != tvt:
+                task_succ[tu].add(tvt)
+                task_preds[tvt].add(tu)
     order_topo = _topo_sort(tkeys, task_preds, task_succ)
 
     # 向上 rank（含通信）
@@ -905,10 +911,11 @@ def _break_task_cycles(gm, op_group, max_moves=400):
 
     def two_cycle_pairs():
         dirs = defaultdict(list)
-        for (u, v) in gm.pair_tensors:
-            a, b = group[u], group[v]
-            if a != b:
-                dirs[(a, b)].append(u)
+        for u in gm.eligible:
+            for v in gm.succs.get(u, ()):      # 完整依赖，含零字节边
+                a, b = group[u], group[v]
+                if a != b:
+                    dirs[(a, b)].append(u)
         return [(a, b) for (a, b) in dirs if (b, a) in dirs], dirs
 
     for _ in range(max_moves):
@@ -936,11 +943,12 @@ def _break_task_cycles(gm, op_group, max_moves=400):
     for _ in range(20):
         ts = defaultdict(set)
         edge_ops = defaultdict(list)
-        for (u, v) in gm.pair_tensors:
-            x, y = group[u], group[v]
-            if x != y:
-                ts[x].add(y)
-                edge_ops[(x, y)].append(u)
+        for u in gm.eligible:
+            for v in gm.succs.get(u, ()):      # 完整依赖，含零字节边
+                x, y = group[u], group[v]
+                if x != y:
+                    ts[x].add(y)
+                    edge_ops[(x, y)].append(u)
         state = {}
         path = []
 

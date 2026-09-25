@@ -372,7 +372,12 @@ def run_case(case_name, evals, cfg, summary, lock):
                         cs = res.get('cache_stats', {})
                         rec['cache_hit_rate'] = round(
                             cs.get('hit_rate', 0.0), 4)
-                    if best is None or rec['makespan'] < best['makespan']:
+                    better = (best is None
+                              or rec['makespan'] < best['makespan']
+                              or (rec['makespan'] == best['makespan']
+                                  and rec.get('added_copy_bytes', 0)
+                                  < best.get('added_copy_bytes', 0)))
+                    if better:
                         best = save_plan(problem, k, plan, rec)
                 except Exception as exc:            # noqa: BLE001
                     errors.append(f'{label}: {str(exc)[:200]}')
@@ -393,7 +398,12 @@ def run_case(case_name, evals, cfg, summary, lock):
                     t0 = time.time()
                     plan = fallback_plan(gm, k)
                     res = eval_plan(evals, problem, graph, plan, cfg)
-                    if best is None or res['makespan'] < best['makespan']:
+                    better = (best is None
+                              or res['makespan'] < best['makespan']
+                              or (res['makespan'] == best['makespan']
+                                  and res['data_movement_bytes']['added_copy_bytes']
+                                  < best.get('added_copy_bytes', 0)))
+                    if better:
                         rec = {
                             'label': 'fallback1core',
                             'makespan': res['makespan'],
@@ -464,10 +474,15 @@ def main():
             ent = summary.get(name, {})
             if ent.get('meta', {}).get('ver') != 3 and ent.get('runs'):
                 ent['runs'] = {}                       # 旧版本结果作废重跑
+            def _cell_done(p, k):
+                best = ent.get('runs', {}).get(f'p{p}_k{k}', {}).get('best')
+                return (isinstance(best, dict)
+                        and isinstance(best.get('makespan'), (int, float))
+                        and best['makespan'] > 0)
             done = (ent.get('meta', {}).get('ver') == 3
                     and 'singlecore' in ent
                     and ent.get('singlecore', {}).get('makespan')
-                    and all(f'p{p}_k{k}' in ent.get('runs', {})
+                    and all(_cell_done(p, k)
                             for p in args.problems for k in args.cores))
             if done:
                 print(f'[{idx+1}/{len(names)}] {name}: skip (done)', flush=True)

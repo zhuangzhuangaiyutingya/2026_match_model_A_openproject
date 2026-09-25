@@ -42,7 +42,17 @@ def _load_legacy_summary():
                 cur['singlecore'] = ent['singlecore']
             runs = cur.setdefault('runs', {})
             for key, rec in ent.get('runs', {}).items():
-                runs.setdefault(key, rec)
+                prev = runs.get(key)
+                if prev is None:
+                    runs[key] = rec
+                    continue
+                a = prev.get('best') or {}
+                b = rec.get('best') or {}
+                ma, mb = a.get('makespan'), b.get('makespan')
+                if not isinstance(ma, (int, float)) or ma <= 0:
+                    runs[key] = rec
+                elif isinstance(mb, (int, float)) and mb > 0 and mb < ma:
+                    runs[key] = rec
     return merged
 
 
@@ -115,14 +125,17 @@ def collect(summary):
                 best = ent.get('runs', {}).get(f'p{p}_k{k}', {}).get('best')
                 if not best:
                     continue
+                hit = best.get('cache_hit_rate')
+                if hit in (None, ''):
+                    hit = 0 if p in (1, 2) else ''
                 rows.append({
                     'case': case, 'problem': p, 'cores': k,
                     'singlecore_makespan': sc_ms,
                     'makespan': best['makespan'],
                     'speedup': round(sc_ms / best['makespan'], 4),
                     'added_copy_bytes': best.get('added_copy_bytes', 0),
-                    'label': best.get('label', ''),
-                    'cache_hit_rate': best.get('cache_hit_rate', ''),
+                    'label': best.get('label') or 'unknown',
+                    'cache_hit_rate': hit,
                     'parallelism': ent.get('meta', {}).get('parallelism', ''),
                     'n_elig': ent.get('meta', {}).get('n_elig', ''),
                 })
