@@ -1,0 +1,65 @@
+{
+ "definition": "官方 CLI 全量复评（每格独立进程，config.txt 固定参数）",
+ "total_cells": 1200,
+ "match": 1189,
+ "mismatch": 11,
+ "errors": 0,
+ "mismatch_note": "P2/P3 官方评估器跨进程非确定（同 plan 不同进程 makespan/added 微差，进程内确定）；修正口径 = audit/ 存档的 CLI 输出值（提交可复现证据）",
+ "mismatch_cells": {
+  "case_005|p2|k4": {
+   "cli": 50215,
+   "old_shard": 49459,
+   "delta_pct": 1.529
+  },
+  "case_005|p2|k5": {
+   "cli": 51940,
+   "old_shard": 51327,
+   "delta_pct": 1.194
+  },
+  "case_005|p3|k4": {
+   "cli": 48388,
+   "old_shard": 48038,
+   "delta_pct": 0.729
+  },
+  "case_005|p3|k5": {
+   "cli": 47089,
+   "old_shard": 46551,
+   "delta_pct": 1.156
+  },
+  "case_010|p3|k5": {
+   "cli": 20574,
+   "old_shard": 20460,
+   "delta_pct": 0.557
+  },
+  "case_033|p2|k2": {
+   "cli": 895402,
+   "old_shard": 894591,
+   "delta_pct": 0.091
+  },
+  "case_033|p2|k5": {
+   "cli": 371357,
+   "old_shard": 370211,
+   "delta_pct": 0.31
+  },
+  "case_033|p3|k2": {
+   "cli": 894292,
+   "old_shard": 893580,
+   "delta_pct": 0.08
+  },
+  "case_033|p3|k5": {
+   "cli": 370731,
+   "old_shard": 369585,
+   "delta_pct": 0.31
+  },
+  "case_071|p2|k4": {
+   "cli": 8546,
+   "old_shard": 8501,
+   "delta_pct": 0.529
+  },
+  "case_086|p3|k5": {
+   "cli": 58634,
+   "old_shard": 58268,
+   "delta_pct": 0.628
+  }
+ }
+}
